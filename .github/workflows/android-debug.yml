@@ -37,7 +37,8 @@ jobs:
           wget -q "https://dl.google.com/android/repository/${CMDLINE_ZIP}" -O cmdline.zip
           unzip -q cmdline.zip -d cmdline-tools
           # move extracted inner folder to the 'latest' folder expected by sdkmanager
-          if [ -d cmdline-tools/cmdline-tools ]; then
+          if [ -d cmdline-tools/cmdline-tools ];
+          then
             mv cmdline-tools/cmdline-tools cmdline-tools/latest
           else
             # sometimes zip extracts directly into cmdline-tools/, handle that
