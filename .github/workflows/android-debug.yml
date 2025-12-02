@@ -9,11 +9,12 @@ jobs:
   build-debug:
     runs-on: ubuntu-latest
     env:
-      # JDK is set up by setup-java step; ANDROID_SDK_ROOT will be set by the emulator-runner action below
       JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -21,21 +22,46 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Use a tested action to install Android SDK components (avoids hard-coded commandline-tools filename)
-      - name: Install Android SDK (platform tools, build-tools, platform)
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          target: default
-          arch: x86_64
-          # You don't actually need the emulator; this action sets up SDK + build-tools for you.
-          emulator-options: "-no-window"
-      # The action above sets ANDROID_SDK_ROOT in the environment for subsequent steps.
-
-      - name: Verify Android SDK root
+      - name: Install prerequisites
         run: |
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --list || true
+          sudo apt-get update
+          sudo apt-get install -y wget unzip unzip
+
+      - name: Download Android command line tools
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT
+          cd $ANDROID_SDK_ROOT
+          echo "Downloading command line tools..."
+          # Known working recent filename — change if Google updates it later
+          CMDLINE_ZIP="commandlinetools-linux-13114758_latest.zip"
+          wget -q "https://dl.google.com/android/repository/${CMDLINE_ZIP}" -O cmdline.zip
+          unzip -q cmdline.zip -d cmdline-tools
+          # move extracted inner folder to the 'latest' folder expected by sdkmanager
+          if [ -d cmdline-tools/cmdline-tools ]; then
+            mv cmdline-tools/cmdline-tools cmdline-tools/latest
+          else
+            # sometimes zip extracts directly into cmdline-tools/, handle that
+            mkdir -p cmdline-tools/latest
+            mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          fi
+          rm -f cmdline.zip
+
+      - name: Install SDK packages (platform-tools, platform, build-tools)
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          # accept licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses --sdk_root=$ANDROID_SDK_ROOT || true
+          echo "PATH after install: $PATH"
+          ls -la $ANDROID_SDK_ROOT || true
+          $ANDROID_SDK_ROOT/platform-tools/adb version || true
+
+      - name: Add Android tools to PATH for rest of job
+        shell: bash
+        run: |
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+          echo "${ANDROID_SDK_ROOT}/platform-tools" >> $GITHUB_PATH
+          echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Cache Gradle
         uses: actions/cache@v4
