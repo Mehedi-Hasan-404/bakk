@@ -1,0 +1,2 @@
+This repo is set up for debug APK building via GitHub Actions (android-debug.yml).
+Local native android/ folder is required: generate with TempApp and copy android/ into this repo.
