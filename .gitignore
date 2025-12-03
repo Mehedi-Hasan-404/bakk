@@ -1,0 +1,53 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React Native
+.expo/
+.expo-shared/
+metro-cache/
+*.bundle
+
+# Build output
+build/
+out/
+dist/
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/app/build/
+android/app/intermediates/
+android/app/release/
+android/app/debug/
+android/app/.cxx/
+android/gradlew
+android/gradlew.bat
+android/gradle/wrapper/gradle-wrapper.jar
+
+# iOS (if exists)
+ios/Pods/
+ios/build/
+*.xcworkspace
+*.xcuserdata
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+
+# Misc
+*.jks
+*.keystore
+*.p12
+*.tmp
