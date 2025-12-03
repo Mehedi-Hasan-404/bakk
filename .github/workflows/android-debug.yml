@@ -25,15 +25,38 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip
+          sudo apt-get install -y wget unzip curl
 
-      - name: Download Android command line tools
+      - name: Download Android command line tools (try multiple names)
         run: |
-          mkdir -p $ANDROID_SDK_ROOT
-          cd $ANDROID_SDK_ROOT
-          echo "Downloading command line tools..."
-          CMDLINE_ZIP="commandlinetools-linux-11076708_latest.zip"
-          wget -q "https://dl.google.com/android/repository/${CMDLINE_ZIP}" -O cmdline.zip
+          mkdir -p "$ANDROID_SDK_ROOT"
+          cd "$ANDROID_SDK_ROOT"
+          echo "Probing candidate commandline-tools filenames..."
+          FOUND=""
+          CANDIDATES=(
+            "commandlinetools-linux-13114758_latest.zip"
+            "commandlinetools-linux-120-9123335_latest.zip"
+            "commandlinetools-linux-110-9123335_latest.zip"
+            "commandlinetools-linux-9477386_latest.zip"
+            "commandlinetools-linux-8512546_latest.zip"
+          )
+          for f in "${CANDIDATES[@]}"; do
+            url="https://dl.google.com/android/repository/${f}"
+            echo "Trying $url"
+            http_status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+            if [ "$http_status" = "200" ]; then
+              FOUND="$f"
+              echo "Found: $url"
+              wget -q "$url" -O cmdline.zip
+              break
+            else
+              echo "Not found: $url (status $http_status)"
+            fi
+          done
+          if [ -z "$FOUND" ]; then
+            echo "Could not find a working commandlinetools zip. Exiting."
+            exit 1
+          fi
           unzip -q cmdline.zip -d cmdline-tools
           if [ -d cmdline-tools/cmdline-tools ]; then
             mv cmdline-tools/cmdline-tools cmdline-tools/latest
@@ -43,14 +66,16 @@ jobs:
           fi
           rm -f cmdline.zip
 
-      - name: Install SDK packages
+      - name: Install SDK packages (platform-tools, platform, build-tools)
         run: |
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses --sdk_root=$ANDROID_SDK_ROOT || true
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          echo "Installing platform-tools, platforms;android-33 and build-tools;33.0.2"
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses --sdk_root="$ANDROID_SDK_ROOT" || true
+          ls -la "$ANDROID_SDK_ROOT"
+          "$ANDROID_SDK_ROOT/platform-tools/adb" version || true
 
-      - name: Add Android tools to PATH
-        shell: bash
+      - name: Add Android tools to PATH for rest of job
         run: |
           echo "${ANDROID_SDK_ROOT}/platform-tools" >> $GITHUB_PATH
           echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> $GITHUB_PATH
@@ -68,18 +93,15 @@ jobs:
       - name: Install JS dependencies
         run: yarn install
 
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
-
       - name: Build debug APK
         env:
-          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload debug APK
+      - name: Upload artifact (debug apk)
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
