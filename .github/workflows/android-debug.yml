@@ -1,98 +1,48 @@
-name: Build Debug APK
+name: Build Android Debug APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build-debug:
+  build:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 17
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Prepare Environment
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install Node Modules
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip curl
-
-      - name: Download working Android Commandline Tools (auto-detect)
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT
-          cd $ANDROID_SDK_ROOT
-
-          echo "Trying multiple commandlinetools versions..."
-          CANDIDATES=(
-            "commandlinetools-linux-11076708_latest.zip"
-            "commandlinetools-linux-10406996_latest.zip"
-            "commandlinetools-linux-9477386_latest.zip"
-            "commandlinetools-linux-9123335_latest.zip"
-            "commandlinetools-linux-8512546_latest.zip"
-          )
-
-          FOUND=""
-
-          for ZIPNAME in "${CANDIDATES[@]}"; do
-            URL="https://dl.google.com/android/repository/$ZIPNAME"
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
-            echo "Checking $URL => $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              FOUND="$ZIPNAME"
-              echo "FOUND WORKING: $ZIPNAME"
-              wget -q "$URL" -O cmdline.zip
-              break
-            fi
-          done
-
-          if [ -z "$FOUND" ]; then
-            echo "ERROR: No valid commandlinetools zip found!"
-            exit 1
-          fi
-
-          unzip -q cmdline.zip -d cmdline-tools
-          rm cmdline.zip
-
-          if [ -d cmdline-tools/cmdline-tools ]; then
-            mv cmdline-tools/cmdline-tools cmdline-tools/latest
-          else
-            mkdir -p cmdline-tools/latest
-            mv cmdline-tools/* cmdline-tools/latest/
-          fi
-
-      - name: Install Android SDK Packages
-        run: |
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-
-          echo "Installing platform-tools, build-tools, and platform..."
-          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "build-tools;33.0.2" "platforms;android-33"
-          yes | sdkmanager --licenses --sdk_root="$ANDROID_SDK_ROOT"
-
-      - name: Add Android SDK Tools to PATH
-        run: |
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-
-      - name: Install JS Dependencies
-        run: yarn install
+          npm install --legacy-peer-deps || yarn install
 
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: app-debug
           path: android/app/build/outputs/apk/debug/*.apk
